@@ -7,11 +7,5 @@ __pycache__/
 .idea/
 .vscode/
 
-# data & artifacts
-*.npy
-*.npz
-*.pt
-*.pth
-newdata/
-predictions/
-real data/
+# data & artifacts (tracked for this project)
+# (keep cache/build out)
