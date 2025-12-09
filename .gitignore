@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.env
+.venv/
+.idea/
+.vscode/
+
+# data & artifacts
+*.npy
+*.npz
+*.pt
+*.pth
+newdata/
+predictions/
+real data/
