@@ -17,6 +17,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
+
+# Ensure project root is in sys.path so local package imports work when run from tools/
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import numpy as np
 import torch

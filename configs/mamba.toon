@@ -1,0 +1,16 @@
+model: mamba
+strategies:
+  - baseline
+  - improved
+  - cutmix
+  - mixup
+  - aug_all
+data:
+  pred_path: real_data/PURE_POS_prediction.npy
+  label_path: real_data/PURE_label.npy
+train:
+  seq_len: 300
+  batch_size: 32
+  num_workers: 0
+  pin_memory: false
+  split: 0.8

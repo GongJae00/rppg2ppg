@@ -1,11 +1,13 @@
 __pycache__/
+.claude/
+.vscode/
 *.py[cod]
 *.pyd
 *.so
 .env
 .venv/
 .idea/
-.vscode/
-
+results/
+orgin/
 # data & artifacts (tracked for this project)
 # (keep cache/build out)
