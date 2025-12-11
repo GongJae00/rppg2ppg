@@ -1,0 +1,23 @@
+# Full requirements for rppg2ppg
+# Note: PyTorch wheel URL depends on your CUDA version
+# For automatic installation: python setup/install.py
+
+# === Core (install via setup/install.py for correct CUDA version) ===
+# torch
+# torchvision
+# torchaudio
+
+# === Scientific Computing ===
+numpy>=1.21.0
+scipy>=1.7.0
+scikit-learn>=1.0.0
+
+# === Visualization ===
+matplotlib>=3.5.0
+
+# === Utilities ===
+tqdm>=4.62.0
+
+# === Mamba (requires CUDA) ===
+# Install after PyTorch with CUDA:
+# pip install causal-conv1d mamba-ssm

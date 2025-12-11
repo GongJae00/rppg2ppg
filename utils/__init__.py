@@ -10,6 +10,7 @@ Modules:
     metrics: 평가 지표 (PSNR, Pearson, MAE, RMSE)
     plot: 시각화 (학습 곡선, 예측 결과)
     toon: TOON 설정 파일 파서
+    env_config: 환경변수 기반 설정 (auto_profile.py 연동)
 """
 from .data import (
     RPPGDataset,
@@ -22,6 +23,13 @@ from .signal import lowpass_filter, bandpass_filter, detrend
 from .metrics import psnr, compute_pearson, mae, rmse, mape
 from .plot import plot_losses, plot_prediction
 from .toon import load_toon
+from .env_config import (
+    get_env_config,
+    get_device,
+    get_dataloader_kwargs,
+    get_amp_context,
+    print_env_summary,
+)
 
 __all__ = [
     # data
@@ -47,4 +55,10 @@ __all__ = [
     "plot_prediction",
     # toon
     "load_toon",
+    # env_config
+    "get_env_config",
+    "get_device",
+    "get_dataloader_kwargs",
+    "get_amp_context",
+    "print_env_summary",
 ]

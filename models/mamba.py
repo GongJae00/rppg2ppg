@@ -4,8 +4,13 @@ from mamba_ssm import Mamba
 
 
 class MambaModel(nn.Module):
-    def __init__(self, d_model: int = 128, d_state: int = 32, d_conv: int = 8, n_blocks: int = 6, dropout: float = 0.1, conv_kernel: int = 7):
+    # NOTE: Origin 코드에서는 d_conv=8 이었으나, 현재 환경의 causal_conv1d CUDA 커널이
+    #       width 2~4만 지원하여 d_conv=4로 변경함. (TODO: 환경 업그레이드 후 d_conv=8로 복원 검토)
+    def __init__(self, d_model: int = 128, d_state: int = 32, d_conv: int = 4, n_blocks: int = 6, dropout: float = 0.1, conv_kernel: int = 7):
         super().__init__()
+        if not 2 <= d_conv <= 4:
+            # causal_conv1d CUDA 커널이 width 2~4만 지원한다.
+            raise ValueError(f"d_conv must be between 2 and 4 for causal_conv1d, got {d_conv}")        
         self.pre_conv = nn.Conv1d(1, d_model, kernel_size=conv_kernel, padding=conv_kernel // 2)
         self.pre_act = nn.GELU()
 

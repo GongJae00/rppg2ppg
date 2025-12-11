@@ -10,8 +10,16 @@ from typing import Tuple
 
 import numpy as np
 import torch
+import warnings
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, Dataset
+
+# PyTorch Dataloader worker 과다 경고 무시 (num_workers를 명시적으로 설정할 때)
+warnings.filterwarnings(
+    "ignore",
+    message="This DataLoader will create .* worker processes",
+    category=UserWarning,
+)
 
 
 class RPPGDataset(Dataset):
@@ -98,6 +106,8 @@ def make_loaders(
     shuffle: bool = True,
     num_workers: int = 0,
     pin_memory: bool = False,
+    persistent_workers: bool = False,
+    prefetch_factor: int = 2,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     학습/검증 DataLoader 생성
@@ -110,6 +120,8 @@ def make_loaders(
         shuffle: 학습 데이터 셔플 여부
         num_workers: 데이터 로더 워커 수
         pin_memory: CUDA 핀 메모리 사용
+        persistent_workers: 워커 프로세스 유지 (num_workers > 0일 때만)
+        prefetch_factor: 프리페치 배치 수 (num_workers > 0일 때만)
 
     Returns:
         train_loader, test_loader
@@ -117,19 +129,25 @@ def make_loaders(
     train_ds = RPPGDataset(train_x, train_y, seq_len)
     test_ds = RPPGDataset(test_x, test_y, seq_len)
 
+    # num_workers > 0일 때만 persistent_workers, prefetch_factor 적용
+    loader_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+    }
+    if num_workers > 0:
+        loader_kwargs["persistent_workers"] = persistent_workers
+        loader_kwargs["prefetch_factor"] = prefetch_factor
+
     train_loader = DataLoader(
         train_ds,
-        batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
+        **loader_kwargs,
     )
     test_loader = DataLoader(
         test_ds,
-        batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
+        **loader_kwargs,
     )
 
     return train_loader, test_loader

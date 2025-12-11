@@ -20,14 +20,60 @@ Usage:
 
     # config 파일 지정
     python run_all.py --config configs/custom.toon
+
+    # 환경 프로파일링 건너뛰기
+    python run_all.py --skip-profile
 """
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
+
+
+def apply_auto_profile() -> dict[str, str]:
+    """
+    auto_profile.py를 실행하여 환경변수를 현재 프로세스에 적용
+
+    Returns:
+        적용된 환경변수 딕셔너리
+    """
+    profile_script = Path(__file__).parent / "setup" / "auto_profile.py"
+
+    if not profile_script.exists():
+        print("[run_all] auto_profile.py not found, skipping environment profiling")
+        return {}
+
+    try:
+        # auto_profile.py 실행하여 출력 캡처
+        result = subprocess.run(
+            [sys.executable, str(profile_script)],
+            capture_output=True,
+            text=True,
+        )
+
+        # export KEY="VALUE" 형식 파싱
+        env_vars = {}
+        for line in result.stdout.strip().split("\n"):
+            match = re.match(r'^export\s+(\w+)="([^"]*)"', line)
+            if match:
+                key, value = match.groups()
+                env_vars[key] = value
+                os.environ[key] = value
+
+        # stderr에 출력된 정보 표시
+        if result.stderr:
+            print(result.stderr.strip())
+
+        return env_vars
+
+    except Exception as e:
+        print(f"[run_all] Failed to run auto_profile.py: {e}")
+        return {}
 
 
 # 사용 가능한 모델 목록
@@ -60,15 +106,21 @@ STRATEGY_NAMES = {
 }
 
 
-def run_experiment(model: str, strategy: str, config: Path) -> bool:
+def run_experiment(model: str, strategy: str, config_dir: Path) -> bool:
     """단일 실험 실행"""
     script = STRATEGY_SCRIPTS[strategy]
     strategy_name = STRATEGY_NAMES[strategy]
 
+    # 모델별 config 파일 자동 선택
+    model_config = config_dir / f"{model}.toon"
+    if not model_config.exists():
+        # fallback: 기본 config 사용
+        model_config = config_dir / "mamba.toon"
+
     cmd = [
         sys.executable,
         script,
-        "--config", str(config),
+        "--config", str(model_config),
         "--model", model,
     ]
 
@@ -115,16 +167,32 @@ Examples:
         help="실행할 전략 (A~E, 기본: 전체)",
     )
     parser.add_argument(
-        "--config", "-c",
+        "--config-dir", "-c",
         type=Path,
-        default=Path("configs/mamba.toon"),
-        help="기본 config 파일 경로",
+        default=Path("configs"),
+        help="config 디렉토리 (모델별 {model}.toon 자동 선택)",
+    )
+    parser.add_argument(
+        "--skip-profile",
+        action="store_true",
+        help="auto_profile.py 실행 건너뛰기",
     )
     args = parser.parse_args()
 
+    # 환경 프로파일링 적용
+    if not args.skip_profile:
+        print("\n" + "=" * 70)
+        print("  환경 프로파일링 적용 중...")
+        print("=" * 70)
+        env_vars = apply_auto_profile()
+        if env_vars:
+            print(f"  적용된 환경변수: {len(env_vars)}개")
+    else:
+        print("\n[run_all] --skip-profile: 환경 프로파일링 건너뜀")
+
     models = args.models
     strategies = args.strategies
-    config = args.config
+    config_dir = args.config_dir
 
     total = len(models) * len(strategies)
 
@@ -132,7 +200,7 @@ Examples:
     print("  rPPG → PPG Regression: 일괄 학습 실행")
     print("=" * 70)
     print(f"  시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Config: {config}")
+    print(f"  Config 디렉토리: {config_dir}/ (모델별 자동 선택)")
     print(f"  모델 ({len(models)}): {', '.join(models)}")
     print(f"  전략 ({len(strategies)}): {', '.join(strategies)}")
     print(f"  총 실험 수: {total}")
@@ -140,20 +208,33 @@ Examples:
 
     results = []
     success_count = 0
+    skipped_count = 0
 
     for model in models:
+        model_failed = False
         for strategy in strategies:
-            success = run_experiment(model, strategy, config)
+            # 모델의 첫 전략이 실패하면 나머지 전략 스킵
+            if model_failed:
+                print(f"\n  [SKIP] {model}:{STRATEGY_NAMES[strategy]} (모델 사용 불가)")
+                results.append((model, strategy, None))  # None = skipped
+                skipped_count += 1
+                continue
+
+            success = run_experiment(model, strategy, config_dir)
             results.append((model, strategy, success))
             if success:
                 success_count += 1
+            elif strategy == strategies[0]:
+                # 첫 번째 전략에서 실패 → 모델 자체가 사용 불가능
+                model_failed = True
+                print(f"  [!] {model} 모델 사용 불가 - 나머지 전략 스킵")
 
     # 결과 요약
     print("\n" + "=" * 70)
     print("  실행 결과 요약")
     print("=" * 70)
     print(f"  완료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  성공: {success_count}/{total}")
+    print(f"  성공: {success_count}/{total}, 스킵: {skipped_count}, 실패: {total - success_count - skipped_count}")
     print()
 
     # 성공/실패 테이블
@@ -166,7 +247,12 @@ Examples:
         for strategy in strategies:
             for m, s, success in results:
                 if m == model and s == strategy:
-                    status = " ✓ " if success else " ✗ "
+                    if success is None:
+                        status = " - "  # skipped
+                    elif success:
+                        status = " ✓ "
+                    else:
+                        status = " ✗ "
                     row += f"  {status}  |"
                     break
         print(row)

@@ -33,6 +33,7 @@ import torch.optim as optim
 from src import get_model, Trainer, Predictor
 from utils import load_and_scale, split_train_test, make_loaders, load_toon
 from utils import apply_mixup, apply_cutmix, plot_losses, psnr, compute_pearson
+from utils import get_env_config, get_device, get_dataloader_kwargs
 
 
 # ===========================================================================
@@ -65,6 +66,11 @@ def main():
     parser.add_argument("--model", type=str, default=None, help="모델 키 (config 오버라이드)")
     args = parser.parse_args()
 
+    # 환경 설정 로드 (auto_profile.py 환경변수 기반)
+    env_config = get_env_config()
+    device = get_device()
+    loader_kwargs = get_dataloader_kwargs()
+
     # 설정 로드
     config = load_toon(args.config)
     model_key = args.model or config.get("model", "mamba")
@@ -80,22 +86,19 @@ def main():
     train_cfg = config.get("train", {})
     seq_len = int(train_cfg.get("seq_len", 300))
     batch_size = int(train_cfg.get("batch_size", 32))
-    num_workers = int(train_cfg.get("num_workers", 0))
-    pin_memory = bool(train_cfg.get("pin_memory", False))
     epochs = int(train_cfg.get("epochs", STRATEGY["epochs"]))
     split_ratio = float(train_cfg.get("split", 0.8))
 
-    # 데이터 로드
+    # 데이터 로드 (환경변수 기반 DataLoader 설정)
     raw_pred, raw_label, x_all, y_all, sx, sy = load_and_scale(pred_path, label_path)
     train_x, test_x, train_y, test_y = split_train_test(x_all, y_all, split=split_ratio)
     train_loader, test_loader = make_loaders(
         train_x, train_y, test_x, test_y,
         seq_len=seq_len, batch_size=batch_size,
-        num_workers=num_workers, pin_memory=pin_memory,
+        **loader_kwargs,
     )
 
-    # 모델 및 학습 구성
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 모델 및 학습 구성 (환경변수 기반 AMP)
     model = get_model(model_key, seq_len).to(device)
 
     criterion = nn.SmoothL1Loss()
@@ -117,6 +120,8 @@ def main():
         device=device,
         scheduler=scheduler,
         clip_grad=STRATEGY["clip_grad"],
+        use_amp=env_config.use_amp,
+        amp_dtype=env_config.amp_dtype,
     )
 
     # 복합 증강 함수 리스트
@@ -131,8 +136,9 @@ def main():
     wait = 0
     patience = STRATEGY["patience"]
 
+    amp_info = f"AMP={env_config.use_amp}({env_config.amp_dtype})" if env_config.use_amp else "AMP=off"
     print(f"\n[{model_key}:{STRATEGY_NAME}] Training started on {device}")
-    print(f"  Epochs: {epochs}, Batch: {batch_size}, Seq: {seq_len}")
+    print(f"  Epochs: {epochs}, Batch: {batch_size}, Seq: {seq_len}, {amp_info}")
     print(f"  Augment: Original + MixUp + CutMix (3x batch)")
     print(f"  Early Stopping: patience={patience}")
     print("-" * 60)

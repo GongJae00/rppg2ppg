@@ -18,8 +18,20 @@ import os
 import platform
 
 # Add setup directory to path for detect_env
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SETUP_DIR)
 from detect_env import detect_environment, print_environment_report, get_platform
+
+# ===========================================================================
+# 버전 설정 (PyTorch는 여기서 관리, 나머지는 requirements 파일)
+# ===========================================================================
+TORCH_VERSION = "2.4.1"      # mamba-ssm ABI 호환
+TORCHVISION_VERSION = "0.19.1"
+TORCHAUDIO_VERSION = "2.4.1"
+# mamba 소스 빌드용 git ref (휠 ABI 불일치 방지)
+MAMBA_GIT_REF = "v2.2.6"
+TORCHVISION_VERSION = "0.19.1"
+TORCHAUDIO_VERSION = "2.4.1"
 
 
 def run_pip(args: list, check: bool = True) -> bool:
@@ -39,14 +51,22 @@ def install_pytorch(cuda_version: str = None, force_cpu: bool = False, plat: str
 
     # macOS: MPS 지원 (Apple Silicon)
     if plat == "macos":
-        print("  -> Installing for macOS (MPS support)")
-        return run_pip(["install", "torch", "torchvision", "torchaudio"])
+        print(f"  -> Installing PyTorch {TORCH_VERSION} for macOS (MPS support)")
+        return run_pip([
+            "install",
+            f"torch=={TORCH_VERSION}",
+            f"torchvision=={TORCHVISION_VERSION}",
+            f"torchaudio=={TORCHAUDIO_VERSION}",
+        ])
 
     # CPU only
     if force_cpu or cuda_version is None:
-        print("  -> Installing CPU version")
+        print(f"  -> Installing PyTorch {TORCH_VERSION} CPU version")
         return run_pip([
-            "install", "torch", "torchvision", "torchaudio",
+            "install",
+            f"torch=={TORCH_VERSION}",
+            f"torchvision=={TORCHVISION_VERSION}",
+            f"torchaudio=={TORCHAUDIO_VERSION}",
             "--index-url", "https://download.pytorch.org/whl/cpu"
         ])
 
@@ -65,30 +85,40 @@ def install_pytorch(cuda_version: str = None, force_cpu: bool = False, plat: str
     else:
         cuda_tag = "cu118"  # Fallback to oldest supported
 
-    print(f"  -> Installing for CUDA {cuda_version} (using {cuda_tag})")
+    print(f"  -> Installing PyTorch {TORCH_VERSION} for CUDA {cuda_version} (using {cuda_tag})")
     return run_pip([
-        "install", "torch", "torchvision", "torchaudio",
+        "install",
+        f"torch=={TORCH_VERSION}+{cuda_tag}",
+        f"torchvision=={TORCHVISION_VERSION}+{cuda_tag}",
+        f"torchaudio=={TORCHAUDIO_VERSION}+{cuda_tag}",
         "--index-url", f"https://download.pytorch.org/whl/{cuda_tag}"
     ])
 
 
 def install_base_requirements():
-    """Install base requirements (non-CUDA dependent)."""
+    """Install base requirements from requirements-base.txt."""
     print("\n[2/3] Installing base requirements...")
 
-    packages = [
-        "numpy",
-        "scipy",
-        "scikit-learn",
-        "matplotlib",
-        "tqdm",
-    ]
+    req_file = os.path.join(SETUP_DIR, "requirements-base.txt")
+    if os.path.exists(req_file):
+        return run_pip(["install", "-r", req_file])
+    else:
+        print(f"  [!] {req_file} not found, installing defaults...")
+        packages = [
+            "numpy>=1.21.0,<2.0",
+            "scipy>=1.7.0,<1.13",
+            "scikit-learn>=1.0.0,<1.4",
+            "matplotlib>=3.5.0",
+            "tqdm>=4.62.0",
+        ]
+        return run_pip(["install"] + packages)
 
-    return run_pip(["install"] + packages)
 
+def install_mamba(has_cuda: bool, plat: str = "linux", build_from_source: bool = True):
+    """Install mamba-ssm.
 
-def install_mamba(has_cuda: bool, plat: str = "linux"):
-    """Install mamba-ssm and causal-conv1d."""
+    build_from_source=True: 소스 빌드(--no-binary, --no-build-isolation)로 torch ABI 맞춤.
+    """
     print("\n[3/3] Installing mamba-ssm...")
 
     # Linux에서만 mamba-ssm 사용 가능
@@ -105,19 +135,27 @@ def install_mamba(has_cuda: bool, plat: str = "linux"):
         print("  [!] Mamba models will not be available")
         return True
 
-    # causal-conv1d is a dependency of mamba-ssm
-    success = run_pip(["install", "causal-conv1d"], check=False)
-    if not success:
-        print("  [!] causal-conv1d installation failed")
-        print("  [!] You may need to install it manually:")
-        print("      pip install causal-conv1d --no-build-isolation")
+    # causal-conv1d 먼저 설치 (소스 빌드)
+    success = run_pip(["install", "--no-binary=causal-conv1d", "--no-build-isolation", "causal-conv1d==1.5.3.post1"], check=False)
 
-    success = run_pip(["install", "mamba-ssm"], check=False)
+    if build_from_source:
+        # mamba-ssm을 git 소스에서 빌드하여 현재 torch와 ABI 맞춤, torch 재설치 방지 위해 --no-deps
+        mamba_src = f"git+https://github.com/state-spaces/mamba.git@{MAMBA_GIT_REF}"
+        success = success and run_pip(["install", "--no-binary=:all:", "--no-build-isolation", "--no-deps", mamba_src], check=False)
+    else:
+        req_file = os.path.join(SETUP_DIR, "requirements-mamba.txt")
+        if os.path.exists(req_file):
+            print(f"  -> Installing from {req_file}")
+            success = success and run_pip(["install", "-r", req_file], check=False)
+        else:
+            print(f"  [!] {req_file} not found, installing defaults (wheels)...")
+            success = success and run_pip(["install", "mamba-ssm==2.2.6.post3"], check=False)
+
     if not success:
         print("\n  [!] mamba-ssm installation failed")
         print("  [!] Common fixes:")
         print("      1. Ensure CUDA toolkit is installed (nvcc available)")
-        print("      2. Try: pip install mamba-ssm --no-build-isolation")
+        print("      2. Try: pip install -r setup/requirements-mamba.txt --no-build-isolation")
         print("      3. Check PyTorch CUDA version matches system CUDA")
         return False
 
@@ -189,6 +227,10 @@ def main():
         "--skip-mamba", action="store_true",
         help="Skip mamba-ssm installation"
     )
+    parser.add_argument(
+        "--no-mamba-source-build", action="store_true",
+        help="Install mamba-ssm wheels instead of building from source (may break ABI)"
+    )
     args = parser.parse_args()
 
     # Get platform
@@ -247,7 +289,11 @@ def main():
         except ImportError:
             has_cuda = False
 
-        install_mamba(has_cuda and not args.cpu, plat=plat)
+        install_mamba(
+            has_cuda and not args.cpu,
+            plat=plat,
+            build_from_source=not args.no_mamba_source_build,
+        )
 
     # Verify
     print("\n" + "=" * 60)
@@ -258,7 +304,7 @@ def main():
         print("\n" + "=" * 60)
         print("  Environment Profile (auto_profile.py)")
         print("=" * 60)
-        auto_profile_path = os.path.join(os.path.dirname(__file__), "auto_profile.py")
+        auto_profile_path = os.path.join(SETUP_DIR, "auto_profile.py")
         if os.path.exists(auto_profile_path):
             subprocess.run([sys.executable, auto_profile_path], check=False)
             print("\n[Tip] Apply these environment variables before training:")

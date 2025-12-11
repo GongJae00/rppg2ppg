@@ -15,7 +15,7 @@ Example:
 """
 from __future__ import annotations
 
-from typing import Callable, Dict, Type
+from typing import Callable, Dict
 
 import torch.nn as nn
 
@@ -28,6 +28,7 @@ from models import (
     PhysDiffModel,
     RhythmMambaModel,
     RadiantModel,
+    _MAMBA_AVAILABLE,
 )
 
 
@@ -38,15 +39,19 @@ from models import (
 # seq_len이 필요 없는 모델도 일관성을 위해 인자로 받음
 
 MODEL_REGISTRY: Dict[str, Callable[[int], nn.Module]] = {
-    "mamba": lambda seq_len: MambaModel(),
+    # 항상 사용 가능한 모델
     "lstm": lambda seq_len: LSTMModel(),
     "bilstm": lambda seq_len: BiLSTMModel(),
     "rnn": lambda seq_len: RNNModel(),
-    "physmamba": lambda seq_len: PhysMambaModel(),
     "physdiff": lambda seq_len: PhysDiffModel(),
-    "rhythmmamba": lambda seq_len: RhythmMambaModel(),
     "transformer": lambda seq_len: RadiantModel(seq_len=seq_len),
 }
+
+# Mamba 기반 모델 (mamba-ssm 필요)
+if _MAMBA_AVAILABLE:
+    MODEL_REGISTRY["mamba"] = lambda seq_len: MambaModel()
+    MODEL_REGISTRY["physmamba"] = lambda seq_len: PhysMambaModel()
+    MODEL_REGISTRY["rhythmmamba"] = lambda seq_len: RhythmMambaModel()
 
 
 def get_model(model_key: str, seq_len: int = 300) -> nn.Module:
@@ -64,7 +69,17 @@ def get_model(model_key: str, seq_len: int = 300) -> nn.Module:
         ValueError: 등록되지 않은 모델 키
     """
     if model_key not in MODEL_REGISTRY:
-        available = ", ".join(MODEL_REGISTRY.keys())
+        available = ", ".join(sorted(MODEL_REGISTRY.keys()))
+
+        # Mamba 모델 요청 시 추가 안내
+        mamba_models = {"mamba", "physmamba", "rhythmmamba"}
+        if model_key in mamba_models and not _MAMBA_AVAILABLE:
+            raise ValueError(
+                f"Model '{model_key}' requires mamba-ssm which is not available.\n"
+                f"  해결: pip uninstall mamba-ssm causal-conv1d && pip install causal-conv1d mamba-ssm\n"
+                f"  Available models: {available}"
+            )
+
         raise ValueError(f"Unknown model: '{model_key}'. Available: {available}")
 
     return MODEL_REGISTRY[model_key](seq_len)
@@ -73,3 +88,8 @@ def get_model(model_key: str, seq_len: int = 300) -> nn.Module:
 def list_models() -> list[str]:
     """등록된 모델 키 목록 반환"""
     return list(MODEL_REGISTRY.keys())
+
+
+def is_mamba_available() -> bool:
+    """mamba-ssm 사용 가능 여부"""
+    return _MAMBA_AVAILABLE

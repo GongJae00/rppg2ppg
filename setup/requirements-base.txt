@@ -1,0 +1,12 @@
+# Base requirements for rppg2ppg
+# PyTorch should be installed separately based on CUDA version
+# Use: python setup/install.py (auto-detects CUDA)
+
+# NumPy 1.x ABI 호환성 유지 (mamba-ssm, causal-conv1d 빌드 호환)
+numpy>=1.21.0,<2.0
+scipy>=1.7.0,<1.13
+scikit-learn>=1.0.0,<1.4
+
+# Visualization & utilities
+matplotlib>=3.5.0
+tqdm>=4.62.0
