@@ -319,9 +319,9 @@ def main():
         print("  1. cd /path/to/rppg2ppg")
         if plat == "linux":
             print('  2. eval "$(python setup/auto_profile.py)"  # Set environment')
-            print("  3. python tools/tool_A_baseline.py --config configs/mamba.toon")
+            print("  3. python strategies/strategy_A_baseline.py --config configs/mamba.toon")
         else:
-            print("  2. python tools/tool_A_baseline.py --config configs/lstm.toon")
+            print("  2. python strategies/strategy_A_baseline.py --config configs/lstm.toon")
             print(f"     (Note: Mamba models not available on {plat})")
         print("  4. Or run all: python run_all.py")
     else:

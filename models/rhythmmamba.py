@@ -2,7 +2,15 @@ import torch
 import torch.nn as nn
 from mamba_ssm import Mamba
 
+from src.registry import register_model
 
+
+@register_model(
+    name="rhythmmamba",
+    requires="mamba-ssm",
+    default_params={"d_model": 160, "d_state": 64, "d_conv": 12, "n_blocks": 8, "dropout": 0.1, "conv_kernel": 9},
+    description="RhythmMamba model for rPPG to PPG conversion",
+)
 class RhythmMambaModel(nn.Module):
     def __init__(self, d_model: int = 160, d_state: int = 64, d_conv: int = 12, n_blocks: int = 8, dropout: float = 0.1, conv_kernel: int = 9):
         super().__init__()

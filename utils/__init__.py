@@ -11,6 +11,7 @@ Modules:
     plot: 시각화 (학습 곡선, 예측 결과)
     toon: TOON 설정 파일 파서
     env_config: 환경변수 기반 설정 (auto_profile.py 연동)
+    early_stopping: Early Stopping 콜백
 """
 from .data import (
     RPPGDataset,
@@ -30,6 +31,25 @@ from .env_config import (
     get_amp_context,
     print_env_summary,
 )
+from .early_stopping import EarlyStopping
+from .output_paths import build_output_paths
+from .metrics_biosignal import (
+    BiosignalMetrics,
+    CompositeResult,
+    compute_biosignal_metrics,
+    compute_subject_metrics,
+    composite_v2_from_metrics,
+    compute_bwmd_for_chunk,
+    compute_sre,
+    compute_wcr,
+    compute_edd,
+    compute_hrv_metrics,
+)
+from .plot_biosignal import (
+    plot_subject_signals_chunks,
+    plot_multi_subject_signals_chunks,
+)
+from .dataset_meta import DatasetMeta, get_dataset_meta, list_datasets, canonicalize_dataset
 
 __all__ = [
     # data
@@ -61,4 +81,27 @@ __all__ = [
     "get_dataloader_kwargs",
     "get_amp_context",
     "print_env_summary",
+    # early_stopping
+    "EarlyStopping",
+    # output paths
+    "build_output_paths",
+    # biosignal metrics
+    "BiosignalMetrics",
+    "CompositeResult",
+    "compute_biosignal_metrics",
+    "compute_subject_metrics",
+    "composite_v2_from_metrics",
+    "compute_bwmd_for_chunk",
+    "compute_sre",
+    "compute_wcr",
+    "compute_edd",
+    "compute_hrv_metrics",
+    # biosignal plots
+    "plot_subject_signals_chunks",
+    "plot_multi_subject_signals_chunks",
+    # dataset meta
+    "DatasetMeta",
+    "get_dataset_meta",
+    "list_datasets",
+    "canonicalize_dataset",
 ]

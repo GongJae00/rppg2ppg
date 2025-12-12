@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from mamba_ssm import Mamba
 
+from src.registry import register_model
+
 
 class BiMambaBlock(nn.Module):
     def __init__(self, d_model: int = 128, d_state: int = 32, d_conv: int = 8, dropout: float = 0.1):
@@ -23,7 +25,13 @@ class BiMambaBlock(nn.Module):
         return x + self.dropout(gated)
 
 
-class PhysMambaModel(nn.Module):
+@register_model(
+    name="physmamba_td",
+    requires="mamba-ssm",
+    default_params={"d_model": 128, "d_state": 32, "d_conv": 8, "n_blocks": 6, "dropout": 0.1, "conv_kernel": 7},
+    description="PhysMamba_TD (BiMamba + Squeeze-Excitation) for rPPG to PPG conversion",
+)
+class PhysMamba_TD(nn.Module):
     def __init__(self, d_model: int = 128, d_state: int = 32, d_conv: int = 8, n_blocks: int = 6, dropout: float = 0.1, conv_kernel: int = 7):
         super().__init__()
         self.pre_conv = nn.Conv1d(1, d_model, kernel_size=conv_kernel, padding=conv_kernel // 2)

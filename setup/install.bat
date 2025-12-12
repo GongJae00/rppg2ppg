@@ -3,7 +3,7 @@ REM Adaptive installation script for rppg2ppg (Windows)
 REM Usage: setup\install.bat [--cpu] [--check]
 REM
 REM Note: Activate your virtual environment first!
-REM   conda activate myenv
+REM   conda activate customenv
 REM   .\venv\Scripts\activate
 
 setlocal enabledelayedexpansion

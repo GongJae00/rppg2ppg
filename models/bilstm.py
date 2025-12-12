@@ -1,7 +1,14 @@
 import torch
 import torch.nn as nn
 
+from src.registry import register_model
 
+
+@register_model(
+    name="bilstm",
+    default_params={"input_size": 1, "hidden_size": 64, "num_layers": 2, "dropout": 0.0},
+    description="Bidirectional LSTM model for rPPG to PPG conversion",
+)
 class BiLSTMModel(nn.Module):
     def __init__(self, input_size: int = 1, hidden_size: int = 64, num_layers: int = 2, dropout: float = 0.0):
         super().__init__()

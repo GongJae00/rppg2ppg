@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from src.registry import register_model
+
 
 class SignalEmbedding(nn.Module):
     def __init__(self, seq_len: int, embed_dim: int = 768, dropout: float = 0.1):
@@ -58,6 +60,11 @@ class RadiantTransformer(nn.Module):
         return self.head(cls_feat).unsqueeze(-1).squeeze(-1)
 
 
+@register_model(
+    name="transformer",
+    default_params={"dropout": 0.1},
+    description="RadiantModel (ViT-based) for rPPG to PPG conversion",
+)
 class RadiantModel(nn.Module):
     def __init__(self, seq_len: int, dropout: float = 0.1):
         super().__init__()

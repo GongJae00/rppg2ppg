@@ -3,7 +3,7 @@
 run_all.py - 전체 모델 및 전략 일괄 실행 스크립트
 
 모든 모델에 대해 A~E 전략을 순차적으로 실행합니다.
-각 모델별로 5개 전략 결과가 results/{model}/ 디렉토리에 저장됩니다.
+각 모델별로 5개 전략 결과가 results/{model}/checkpoints|plots|predictions/ 로 저장됩니다.
 
 Usage:
     # 전체 실행 (8 모델 × 5 전략 = 40 실험)
@@ -82,7 +82,8 @@ AVAILABLE_MODELS = [
     "lstm",
     "bilstm",
     "rnn",
-    "physmamba",
+    "physmamba_td",
+    "physmamba_sssd",
     "rhythmmamba",
     "physdiff",
     "transformer",
@@ -90,11 +91,11 @@ AVAILABLE_MODELS = [
 
 # 전략 매핑: A~E → 실행 스크립트
 STRATEGY_SCRIPTS = {
-    "A": "tools/tool_A_baseline.py",
-    "B": "tools/tool_B_improved.py",
-    "C": "tools/tool_C_cutmix.py",
-    "D": "tools/tool_D_mixup.py",
-    "E": "tools/tool_E_aug_all.py",
+    "A": "strategies/strategy_A_baseline.py",
+    "B": "strategies/strategy_B_improved.py",
+    "C": "strategies/strategy_C_cutmix.py",
+    "D": "strategies/strategy_D_mixup.py",
+    "E": "strategies/strategy_E_aug_all.py",
 }
 
 STRATEGY_NAMES = {
@@ -260,9 +261,11 @@ Examples:
     print("=" * 70)
 
     # 결과 디렉토리 안내
-    print("\n  결과 저장 위치:")
+    print("\n  결과 저장 위치 (모델별):")
     for model in models:
-        print(f"    - results/{model}/")
+        print(f"    - results/{model}/checkpoints/")
+        print(f"      results/{model}/plots/")
+        print(f"      results/{model}/predictions/")
 
     if success_count < total:
         sys.exit(1)

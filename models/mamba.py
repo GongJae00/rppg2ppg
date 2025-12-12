@@ -2,7 +2,15 @@ import torch
 import torch.nn as nn
 from mamba_ssm import Mamba
 
+from src.registry import register_model
 
+
+@register_model(
+    name="mamba",
+    requires="mamba-ssm",
+    default_params={"d_model": 128, "d_state": 32, "d_conv": 4, "n_blocks": 6, "dropout": 0.1, "conv_kernel": 7},
+    description="Mamba (State Space Model) for rPPG to PPG conversion",
+)
 class MambaModel(nn.Module):
     # NOTE: Origin 코드에서는 d_conv=8 이었으나, 현재 환경의 causal_conv1d CUDA 커널이
     #       width 2~4만 지원하여 d_conv=4로 변경함. (TODO: 환경 업그레이드 후 d_conv=8로 복원 검토)

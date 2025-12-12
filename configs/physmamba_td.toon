@@ -1,4 +1,4 @@
-model: physmamba
+model: physmamba_td
 strategies:
   - baseline
   - improved
@@ -6,8 +6,8 @@ strategies:
   - mixup
   - aug_all
 data:
-  pred_path: real_data/PURE_POS_prediction.npy
-  label_path: real_data/PURE_label.npy
+  pred_path: data/PURE_prediction/PURE_POS_prediction.npy
+  label_path: data/PURE_label.npy
 train:
   seq_len: 300
   batch_size: 32

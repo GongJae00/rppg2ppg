@@ -2,7 +2,7 @@
 # Usage: .\setup\install.ps1 [-Cpu] [-Check]
 #
 # Note: Activate your virtual environment first!
-#   conda activate myenv
+#   conda activate customenv
 #   .\venv\Scripts\Activate.ps1
 
 param(

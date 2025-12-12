@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 .idea/
 results/
-orgin/
+origin/
+newdata/
 # data & artifacts (tracked for this project)
 # (keep cache/build out)

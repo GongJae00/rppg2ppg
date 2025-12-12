@@ -1,4 +1,4 @@
-model: physdiff
+model: physmamba_sssd
 strategies:
   - baseline
   - improved

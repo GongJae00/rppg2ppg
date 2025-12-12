@@ -1,7 +1,14 @@
 import torch
 import torch.nn as nn
 
+from src.registry import register_model
 
+
+@register_model(
+    name="rnn",
+    default_params={"input_size": 1, "hidden_size": 64, "num_layers": 2, "nonlinearity": "tanh", "dropout": 0.0},
+    description="Basic RNN model for rPPG to PPG conversion",
+)
 class RNNModel(nn.Module):
     def __init__(self, input_size: int = 1, hidden_size: int = 64, num_layers: int = 2, nonlinearity: str = "tanh", dropout: float = 0.0):
         super().__init__()

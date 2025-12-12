@@ -4,7 +4,7 @@
 #
 # Note: Activate your virtual environment first!
 #   pyenv activate rppg-310  (or your env name)
-#   conda activate myenv
+#   conda activate customenv
 #   source venv/bin/activate
 
 set -e

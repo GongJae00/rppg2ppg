@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.registry import register_model
+
 
 def disentangle(signal: torch.Tensor):
     """Split signal into normalized trend and amplitude."""
@@ -14,6 +16,11 @@ def disentangle(signal: torch.Tensor):
     return trend.unsqueeze(-1), amp.unsqueeze(-1)
 
 
+@register_model(
+    name="physdiff",
+    default_params={"d_model": 64, "nhead": 4, "num_layers": 4},
+    description="PhysDiff model with signal decomposition (trend, amplitude)",
+)
 class PhysDiffModel(nn.Module):
     def __init__(self, d_model: int = 64, nhead: int = 4, num_layers: int = 4):
         super().__init__()
