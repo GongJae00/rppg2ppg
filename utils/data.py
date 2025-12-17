@@ -6,13 +6,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
 import warnings
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, Dataset
+
+from utils.env_config import get_dataloader_kwargs
 
 # PyTorch Dataloader worker 과다 경고 무시 (num_workers를 명시적으로 설정할 때)
 warnings.filterwarnings(
@@ -104,13 +106,15 @@ def make_loaders(
     seq_len: int = 300,
     batch_size: int = 32,
     shuffle: bool = True,
-    num_workers: int = 0,
-    pin_memory: bool = False,
-    persistent_workers: bool = False,
-    prefetch_factor: int = 2,
+    num_workers: Optional[int] = None,
+    pin_memory: Optional[bool] = None,
+    persistent_workers: Optional[bool] = None,
+    prefetch_factor: Optional[int] = None,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     학습/검증 DataLoader 생성
+
+    환경변수(auto_profile.py)를 우선 사용하고, 명시적 인자가 있으면 오버라이드합니다.
 
     Args:
         train_x, train_y: 학습 데이터
@@ -118,10 +122,10 @@ def make_loaders(
         seq_len: 시퀀스 길이
         batch_size: 배치 크기
         shuffle: 학습 데이터 셔플 여부
-        num_workers: 데이터 로더 워커 수
-        pin_memory: CUDA 핀 메모리 사용
-        persistent_workers: 워커 프로세스 유지 (num_workers > 0일 때만)
-        prefetch_factor: 프리페치 배치 수 (num_workers > 0일 때만)
+        num_workers: 데이터 로더 워커 수 (None이면 환경변수/자동 감지)
+        pin_memory: CUDA 핀 메모리 사용 (None이면 환경변수/자동 감지)
+        persistent_workers: 워커 프로세스 유지 (None이면 환경변수 사용)
+        prefetch_factor: 프리페치 배치 수 (None이면 환경변수 사용)
 
     Returns:
         train_loader, test_loader
@@ -129,25 +133,29 @@ def make_loaders(
     train_ds = RPPGDataset(train_x, train_y, seq_len)
     test_ds = RPPGDataset(test_x, test_y, seq_len)
 
-    # num_workers > 0일 때만 persistent_workers, prefetch_factor 적용
-    loader_kwargs = {
-        "batch_size": batch_size,
-        "num_workers": num_workers,
-        "pin_memory": pin_memory,
-    }
-    if num_workers > 0:
-        loader_kwargs["persistent_workers"] = persistent_workers
-        loader_kwargs["prefetch_factor"] = prefetch_factor
+    # 환경변수 기반 설정 가져오기 (auto_profile.py 설정 활용)
+    env_kwargs = get_dataloader_kwargs(override_workers=num_workers)
+
+    # 명시적 인자로 오버라이드
+    if pin_memory is not None:
+        env_kwargs["pin_memory"] = pin_memory
+    if persistent_workers is not None and env_kwargs["num_workers"] > 0:
+        env_kwargs["persistent_workers"] = persistent_workers
+    if prefetch_factor is not None and env_kwargs["num_workers"] > 0:
+        env_kwargs["prefetch_factor"] = prefetch_factor
+
+    # 배치 크기 추가
+    env_kwargs["batch_size"] = batch_size
 
     train_loader = DataLoader(
         train_ds,
         shuffle=shuffle,
-        **loader_kwargs,
+        **env_kwargs,
     )
     test_loader = DataLoader(
         test_ds,
         shuffle=False,
-        **loader_kwargs,
+        **env_kwargs,
     )
 
     return train_loader, test_loader

@@ -262,10 +262,17 @@ class FrequencyDomainFeedForward(nn.Module):
         x_freq_imag = self.freq_linear2(self.dropout(self.act(self.freq_linear1(x_freq_imag))))
 
         # Reconstruct complex tensor
-        x_freq_processed = torch.complex(x_freq_real, x_freq_imag)
+        # torch.complex does not support bfloat16, so upcast just for FFT path
+        complex_dtype = torch.float16 if x_freq_real.dtype == torch.float16 else torch.float32
+        x_freq_processed = torch.complex(
+            x_freq_real.to(complex_dtype),
+            x_freq_imag.to(complex_dtype),
+        )
 
         # IFFT: Frequency -> Time domain
         x_time = torch.fft.irfft(x_freq_processed, n=x.shape[1], dim=1)
+        if x_time.dtype != residual.dtype:
+            x_time = x_time.to(residual.dtype)
 
         # Time domain residual path
         x_residual = self.time_linear(x)

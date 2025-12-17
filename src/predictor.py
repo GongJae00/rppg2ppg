@@ -42,6 +42,7 @@ class Predictor:
         seq_len: int = 300,
         overlap: float = 0.5,
         fill_tail: bool = True,
+        batch_size: int = 512,
     ) -> np.ndarray:
         """
         슬라이딩 윈도우 예측
@@ -51,37 +52,49 @@ class Predictor:
             seq_len: 윈도우 크기
             overlap: 중첩 비율 (0.0 ~ 1.0)
             fill_tail: 마지막 부분 채우기 여부
+            batch_size: 추론 배치 크기 (GPU 메모리에 맞게 조절)
 
         Returns:
             예측값 (정규화된 상태)
         """
         step = max(1, int(seq_len * (1 - overlap)))
-        L = len(x_all)
+        L = int(len(x_all))
 
-        preds_accum = np.zeros(L, dtype=np.float32)
-        weight_accum = np.zeros(L, dtype=np.float32)
+        # 원본 구현과 동일하게 L < seq_len이면 0 벡터 반환
+        if L < seq_len or L == 0:
+            return np.zeros(L, dtype=np.float32)
+
+        # 입력을 한 번만 텐서로 변환
+        x_t = torch.as_tensor(x_all, dtype=torch.float32, device=self.device).view(-1)
+
+        # 윈도우 시작 인덱스 생성 (마지막 tail 윈도우 포함)
+        starts = torch.arange(0, L - seq_len + 1, step, device=self.device, dtype=torch.long)
+        if fill_tail:
+            last_start = L - seq_len
+            if last_start >= 0 and (starts.numel() == 0 or int(starts[-1]) != last_start):
+                starts = torch.cat([starts, torch.tensor([last_start], device=self.device, dtype=torch.long)])
+
+        offsets = torch.arange(seq_len, device=self.device, dtype=torch.long)
+
+        preds_accum = torch.zeros(L, device=self.device, dtype=torch.float32)
+        weight_accum = torch.zeros(L, device=self.device, dtype=torch.float32)
 
         self.model.eval()
-        with torch.no_grad():
-            for i in range(0, L - seq_len + 1, step):
-                chunk = torch.tensor(x_all[i : i + seq_len]).float()
-                chunk = chunk.unsqueeze(0).unsqueeze(-1).to(self.device)
+        with torch.inference_mode():
+            for start_batch in starts.split(batch_size):
+                idx = start_batch[:, None] + offsets[None, :]  # (B, seq_len)
+                windows = x_t[idx].unsqueeze(-1)  # (B, seq_len, 1)
 
-                out = self.model(chunk).cpu().numpy().flatten()
-                preds_accum[i : i + seq_len] += out
-                weight_accum[i : i + seq_len] += 1
+                out = self.model(windows)
+                if out.dim() == 3:
+                    out = out.squeeze(-1)
+                out = out.to(torch.float32)
 
-            # 마지막 부분 처리
-            if fill_tail:
-                last_start = L - seq_len
-                if last_start >= 0 and weight_accum[last_start:].min() == 0:
-                    chunk = torch.tensor(x_all[last_start:]).float()
-                    chunk = chunk.unsqueeze(0).unsqueeze(-1).to(self.device)
-                    out = self.model(chunk).cpu().numpy().flatten()
-                    preds_accum[last_start:] += out
-                    weight_accum[last_start:] += 1
+                preds_accum.scatter_add_(0, idx.reshape(-1), out.reshape(-1))
+                weight_accum.scatter_add_(0, idx.reshape(-1), torch.ones_like(out).reshape(-1))
 
-        return preds_accum / np.maximum(weight_accum, 1e-8)
+        preds_norm = preds_accum / torch.clamp(weight_accum, min=1.0)
+        return preds_norm.detach().cpu().numpy().astype(np.float32)
 
     def postprocess(
         self,

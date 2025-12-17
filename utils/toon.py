@@ -6,6 +6,7 @@ from typing import Any
 
 
 def _parse_scalar(value: str) -> Any:
+    """스칼라 값 파싱 (int, float, bool, None, 리스트 등)"""
     v = value.strip()
     if v.lower() == "true":
         return True
@@ -23,7 +24,8 @@ def _parse_scalar(value: str) -> Any:
         pass
     try:
         return ast.literal_eval(v)
-    except Exception:
+    except (ValueError, SyntaxError):
+        # 따옴표 없는 문자열은 그대로 반환 (YAML 스타일)
         return v
 
 

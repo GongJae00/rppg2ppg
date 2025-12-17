@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -75,12 +76,25 @@ def dtw_distance(a: np.ndarray, b: np.ndarray) -> float:
     if na == 0 or nb == 0:
         return 0.0
 
+    # Python 2중 루프이지만, 로컬 변수/슬라이스 캐싱으로 오버헤드 최소화
     D = np.full((na + 1, nb + 1), np.inf, dtype=float)
     D[0, 0] = 0.0
+    b_local = b  # local alias
     for i in range(1, na + 1):
+        ai = a[i - 1]
+        Di = D[i]
+        Dim1 = D[i - 1]
         for j in range(1, nb + 1):
-            cost = abs(a[i - 1] - b[j - 1])
-            D[i, j] = cost + min(D[i - 1, j], D[i, j - 1], D[i - 1, j - 1])
+            cost = abs(ai - b_local[j - 1])
+            # min(Dim1[j], Di[j-1], Dim1[j-1])
+            m1 = Dim1[j]
+            m2 = Di[j - 1]
+            m3 = Dim1[j - 1]
+            if m2 < m1:
+                m1 = m2
+            if m3 < m1:
+                m1 = m3
+            Di[j] = cost + m1
 
     dist = float(D[na, nb])
     return dist / max(na + nb, 1)
@@ -524,8 +538,12 @@ def compute_biosignal_metrics(
                     min_distance_sec=min_peak_distance_sec,
                 )
             )
-        except Exception:
-            pass
+        except Exception as e:
+            # BWMD 계산 실패 시 경고 (한 번만 출력)
+            warnings.warn(
+                f"[metrics] BWMD 계산 실패 (청크 {i}): {e}",
+                stacklevel=2,
+            )
         y_chunks.append(y_c)
         yhat_chunks.append(yhat_c)
 
@@ -596,4 +614,3 @@ def compute_subject_metrics(
             )
         )
     return subject_metrics
-

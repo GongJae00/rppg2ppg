@@ -20,7 +20,7 @@ class EarlyStopping:
 
     Args:
         patience: 개선 없이 대기할 최대 에폭 수
-        min_delta: 개선으로 인정할 최소 변화량
+        min_delta: 개선으로 인정할 최소 변화량 (기본값: 1e-4)
         mode: 'min' (손실 최소화) 또는 'max' (정확도 최대화)
         save_path: 최적 모델 저장 경로 (None이면 저장 안 함)
         verbose: 상태 출력 여부
@@ -43,7 +43,7 @@ class EarlyStopping:
     def __init__(
         self,
         patience: int = 10,
-        min_delta: float = 0.0,
+        min_delta: float = 1e-4,
         mode: str = "min",
         save_path: Optional[Path] = None,
         verbose: bool = False,
@@ -106,7 +106,15 @@ class EarlyStopping:
 
     def _save_checkpoint(self, model: nn.Module):
         """최적 모델 상태 저장"""
-        self.best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        # GPU 모델은 v.cpu()만으로 이미 복사본이 생성되므로 clone()은 중복 비용.
+        # CPU 학습 시에는 원본과 분리해야 하므로 clone() 유지.
+        state = {}
+        for k, v in model.state_dict().items():
+            if v.device.type == "cpu":
+                state[k] = v.detach().clone()
+            else:
+                state[k] = v.detach().cpu()
+        self.best_state = state
         if self.save_path:
             torch.save(self.best_state, self.save_path)
 

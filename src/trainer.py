@@ -76,6 +76,26 @@ class Trainer:
             return torch.amp.autocast("cuda", dtype=self.amp_dtype)
         return nullcontext()
 
+    def _backward(self, loss: torch.Tensor) -> None:
+        """AMP를 고려한 backward (중복 제거용 헬퍼)"""
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+        else:
+            loss.backward()
+
+    def _optimizer_step(self) -> None:
+        """Gradient 클리핑 + Optimizer step + Scaler update (중복 제거용 헬퍼)"""
+        if self.scaler is not None:
+            if self.clip_grad is not None:
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            if self.clip_grad is not None:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
+            self.optimizer.step()
+
     def train_epoch(
         self,
         loader: DataLoader,
@@ -94,7 +114,7 @@ class Trainer:
             평균 학습 손실
         """
         self.model.train()
-        total_loss = 0.0
+        total_loss = 0.0  # CPU float로 누적 (GPU 메모리 효율화)
 
         for xb, yb in loader:
             xb, yb = xb.to(self.device), yb.to(self.device)
@@ -104,32 +124,23 @@ class Trainer:
                 xb, yb = augment_fn(xb, yb)
 
             # Forward with AMP
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             with self._get_autocast():
                 out = self.model(xb)
                 loss = self.criterion(out, yb)
 
-            # Backward with AMP
-            if self.scaler is not None:
-                self.scaler.scale(loss).backward()
-                if self.clip_grad is not None:
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                loss.backward()
-                if self.clip_grad is not None:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
-                self.optimizer.step()
+            # Backward + Optimizer step
+            self._backward(loss)
+            self._optimizer_step()
 
-            total_loss += loss.item()
+            total_loss += loss.detach().item()  # CPU로 추출
 
         # 스케줄러 스텝 (에폭 기반)
         if self.scheduler is not None:
             self.scheduler.step()
 
-        return total_loss / len(loader)
+        denom = max(len(loader), 1)
+        return total_loss / denom
 
     def train_epoch_multi_aug(
         self,
@@ -139,7 +150,8 @@ class Trainer:
         """
         복수 증강을 적용한 학습 (aug_all 전략용, AMP 지원)
 
-        원본 + 각 증강 결과를 concat하여 3배 배치로 학습
+        Gradient Accumulation 방식으로 메모리 효율적으로 학습합니다.
+        원본 + 각 증강을 개별적으로 forward/backward 후 한 번에 optimizer step.
 
         Args:
             loader: 학습 데이터 로더
@@ -150,47 +162,41 @@ class Trainer:
         """
         self.model.train()
         total_loss = 0.0
+        num_augments = 1 + len(augment_fns)  # 원본 + 증강 개수
 
         for xb, yb in loader:
             xb, yb = xb.to(self.device), yb.to(self.device)
+            self.optimizer.zero_grad(set_to_none=True)
+            batch_loss = 0.0
 
-            # 원본 + 각 증강 결과 concat
-            x_list = [xb]
-            y_list = [yb]
+            # 1. 원본 데이터 처리
+            with self._get_autocast():
+                out = self.model(xb)
+                loss = self.criterion(out, yb) / num_augments
+
+            self._backward(loss)
+            batch_loss += loss.detach().item() * num_augments
+
+            # 2. 각 증강 개별 처리 (메모리 효율: concat 없음)
             for aug_fn in augment_fns:
                 x_aug, y_aug = aug_fn(xb, yb)
-                x_list.append(x_aug)
-                y_list.append(y_aug)
+                with self._get_autocast():
+                    out = self.model(x_aug)
+                    loss = self.criterion(out, y_aug) / num_augments
 
-            xb_all = torch.cat(x_list, dim=0)
-            yb_all = torch.cat(y_list, dim=0)
+                self._backward(loss)
+                batch_loss += loss.detach().item() * num_augments
 
-            # Forward with AMP
-            self.optimizer.zero_grad()
-            with self._get_autocast():
-                out = self.model(xb_all)
-                loss = self.criterion(out, yb_all)
+            # 3. Optimizer step (한 번만)
+            self._optimizer_step()
 
-            # Backward with AMP
-            if self.scaler is not None:
-                self.scaler.scale(loss).backward()
-                if self.clip_grad is not None:
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                loss.backward()
-                if self.clip_grad is not None:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad)
-                self.optimizer.step()
-
-            total_loss += loss.item()
+            total_loss += batch_loss / num_augments
 
         if self.scheduler is not None:
             self.scheduler.step()
 
-        return total_loss / len(loader)
+        denom = max(len(loader), 1)
+        return total_loss / denom
 
     def validate(self, loader: DataLoader) -> float:
         """
@@ -203,16 +209,17 @@ class Trainer:
             평균 검증 손실
         """
         self.model.eval()
-        total_loss = 0.0
+        total_loss = 0.0  # CPU float로 누적 (GPU 메모리 효율화)
 
         with torch.no_grad():
             for xb, yb in loader:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 with self._get_autocast():
                     out = self.model(xb)
-                    total_loss += self.criterion(out, yb).item()
+                    total_loss += self.criterion(out, yb).detach().item()
 
-        return total_loss / len(loader)
+        denom = max(len(loader), 1)
+        return total_loss / denom
 
     def save_checkpoint(self, path: str):
         """모델 체크포인트 저장"""

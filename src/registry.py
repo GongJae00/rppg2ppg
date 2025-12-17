@@ -372,14 +372,25 @@ def list_datasets() -> List[str]:
 
 # ===========================================================================
 # Auto-discovery: 모델/데이터셋 모듈 자동 로드
+#
+# strategies/ 폴더는 실행 스크립트(엔트리포인트)만 두는 영역이라
+# 레지스트리에서 자동 import 하지 않습니다. (전략 정의는 src/strategy.py)
 # ===========================================================================
 
 
 def _auto_import_models():
     """models/ 디렉토리의 모든 모델 모듈 자동 import"""
+    import os
+
     models_dir = Path(__file__).parent.parent / "models"
     if not models_dir.exists():
         return
+
+    # 디버그 모드: RPPG_DEBUG=1 환경변수로 활성화
+    debug_mode = os.environ.get("RPPG_DEBUG", "0") == "1"
+
+    # Mamba 의존성 모듈 목록 (선택적 의존성)
+    mamba_modules = {"mamba", "physmamba_td", "physmamba_sssd", "rhythmmamba"}
 
     for f in models_dir.glob("*.py"):
         if f.stem.startswith("_"):
@@ -387,8 +398,17 @@ def _auto_import_models():
         try:
             importlib.import_module(f"models.{f.stem}")
         except ImportError as e:
-            # Mamba 등 의존성 실패는 조용히 무시
-            pass
+            # Mamba 계열은 선택적 의존성 → 디버그 모드에서만 경고
+            if f.stem in mamba_modules:
+                if debug_mode:
+                    warnings.warn(
+                        f"[registry] 선택적 모델 '{f.stem}' 로드 실패 (mamba-ssm 미설치): {e}"
+                    )
+            else:
+                # 필수 모델 로드 실패 → 항상 경고
+                warnings.warn(
+                    f"[registry] 모델 '{f.stem}' 임포트 실패: {e}"
+                )
 
 
 def _auto_import_datasets():
@@ -406,22 +426,6 @@ def _auto_import_datasets():
             warnings.warn(f"Failed to import dataset module '{f.stem}': {e}")
 
 
-def _auto_import_strategies():
-    """strategies/ 디렉토리의 모든 전략 모듈 자동 import"""
-    strategies_dir = Path(__file__).parent.parent / "strategies"
-    if not strategies_dir.exists():
-        return
-
-    for f in strategies_dir.glob("*.py"):
-        if f.stem.startswith("_"):
-            continue
-        try:
-            importlib.import_module(f"strategies.{f.stem}")
-        except ImportError as e:
-            warnings.warn(f"Failed to import strategy module '{f.stem}': {e}")
-
-
 # 모듈 로드 시 자동 discovery 실행
 _auto_import_models()
 _auto_import_datasets()
-_auto_import_strategies()
