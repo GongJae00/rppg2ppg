@@ -24,6 +24,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 from src.registry import StrategyConfig
 from utils.augmentation import apply_mixup, apply_cutmix
+from utils.losses import PhysMambaSSSDLoss
 
 
 # ===========================================================================
@@ -36,6 +37,7 @@ LOSS_FACTORY: Dict[str, type] = {
     "huber": nn.HuberLoss,
     "l1": nn.L1Loss,
     "mae": nn.L1Loss,  # alias
+    "physmamba_sssd": PhysMambaSSSDLoss,
 }
 
 

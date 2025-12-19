@@ -1,16 +1,23 @@
 model: physmamba_sssd
-strategies:
-  - baseline
-  - improved
-  - cutmix
-  - mixup
-  - aug_all
+
+strategy_override:
+  loss: physmamba_sssd
+  optimizer: adamw
+  lr: 3e-4
+  weight_decay: 0.0
+  scheduler: null
+  augment: null
+  clip_grad: null
+  epochs: 30
+  patience: 10
+  overlap: 0.0
+  fill_tail: true
 data:
   pred_path: data/PURE_prediction/PURE_POS_prediction.npy
   label_path: data/PURE_label.npy
 train:
-  seq_len: 300
-  batch_size: 32
+  seq_len: 160
+  batch_size: 16
   num_workers: 0
   pin_memory: false
   split: 0.8

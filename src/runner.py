@@ -21,7 +21,7 @@ import numpy as np
 
 import torch
 
-from src.registry import get_model
+from src.registry import get_model, StrategyConfig
 from src.strategy import get_strategy, get_strategy_by_code
 from src.factory import build_from_strategy
 from src.trainer import Trainer
@@ -90,6 +90,17 @@ def run_strategy(
     if verbose:
         print(f"Model: {model_key}")
         print(f"Config: {config_path}")
+
+    # 3.1 전략 오버라이드 (config 기준, 선택)
+    strategy_override = config.get("strategy_override") or config.get("strategy_overrides")
+    if strategy_override:
+        data = vars(strategy).copy()
+        for key, value in strategy_override.items():
+            if key in data:
+                data[key] = value
+            elif verbose:
+                print(f"[runner] Unknown strategy override key: {key}")
+        strategy = StrategyConfig(**data)
 
     # 4. 데이터 경로 설정
     data_cfg = config.get("data", {})

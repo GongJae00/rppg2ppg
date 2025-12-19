@@ -401,7 +401,7 @@ python strategies/strategy_F_advanced.py --config configs/mamba.toon
 |------|------|--------|------|
 | `augment` | str | `None` | 증강 방식 (`None`, `"cutmix"`, `"mixup"`, `"all"`) |
 | `augment_alpha` | float | `0.2` | Beta 분포 파라미터 |
-| `loss` | str | `"mse"` | 손실함수 (`"mse"`, `"smoothl1"`, `"huber"`) |
+| `loss` | str | `"mse"` | 손실함수 (`"mse"`, `"smoothl1"`, `"huber"`, `"physmamba_sssd"`) |
 | `optimizer` | str | `"adam"` | 옵티마이저 (`"adam"`, `"adamw"`, `"sgd"`) |
 | `lr` | float | `1e-4` | 학습률 |
 | `weight_decay` | float | `0.0` | L2 정규화 계수 |
